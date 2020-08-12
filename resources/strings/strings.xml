@@ -93,4 +93,7 @@
   <string id="Field59">Required Pace Marathon (42.195 km)</string>
   <string id="Field60">Required Pace 50K</string>
   <string id="Field61">Required Pace 100K</string>
+  
+  <string id="PARAM_DATA_REFRESH_INTERVAL">Data refresh interval (in seconds)</string>
+  <string id="PARAM_DESC_DATA_REFRESH_INTERVAL">Default = 1, Max = 60</string>
 </strings>

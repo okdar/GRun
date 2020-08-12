@@ -70,6 +70,9 @@ class GRunView extends WatchUi.DataField
   protected var targetPace;
   // Used to determine if speed/pace is too slow or too fast
   protected var paceRange;
+
+  // How often recalculate data
+  protected var dataRefreshInterval;
   
   // Used to stored the type of data each area will display (Exemple: Current Pace, Distance, etc.)
   protected var vType = new [10]b;
@@ -300,6 +303,8 @@ class GRunView extends WatchUi.DataField
     targetPace = getParameter("TargetPace", isPaceUnitsImperial ? 530 : 330);
     paceRange = getParameter("PaceRange", 15);
     
+    dataRefreshInterval = getParameter("DataRefreshInterval", 1);
+        
     var TYPE_DEFAULT_VALUE = [
       6 /* OPTION_CURRENT_HEART_RATE */,
       50 /* OPTION_ETA_5K */,
@@ -656,6 +661,12 @@ class GRunView extends WatchUi.DataField
   // guarantee that compute() will be called before onUpdate().
   function compute(info)
   {
+    //compute new info only in given interval
+  	var currentSecond = System.getClockTime().sec; 
+	if ((currentSecond == 0 ? 60 : currentSecond) % dataRefreshInterval != 0) {
+		return;
+	}
+	
     // The current timer value in milliseconds (ms)
     if (info.timerTime != null)
     {

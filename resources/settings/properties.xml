@@ -22,4 +22,5 @@
   <property id="Area8" type="number">2</property>
   <property id="Area9" type="number">1</property>
   <property id="Area10" type="number">20</property>
+  <property id="DataRefreshInterval" type="number">1</property>
 </properties>

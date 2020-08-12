@@ -66,4 +66,8 @@
     </settingConfig>
   </setting>
 
+  <setting propertyKey="@Properties.DataRefreshInterval" title="@Strings.PARAM_DATA_REFRESH_INTERVAL" prompt="@Strings.PARAM_DESC_DATA_REFRESH_INTERVAL">
+    <settingConfig type="numeric" min="1" max="60" />
+  </setting>
+  
 </settings>
