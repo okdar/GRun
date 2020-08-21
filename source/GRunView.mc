@@ -628,7 +628,7 @@ class GRunView extends WatchUi.DataField
     // Calculate if we are ahead of behing the target pace
     if (value == 34 /* OPTION_TIME_OFFSET */)
     {
-      return timer - (targetPace * distance);
+      return targetPace == 0 ? 0 : timer - (targetPace * distance);
     }
     
     if ( (value == 35 /* OPTION_HR_ZONE */) && (info.currentHeartRate != null) )
@@ -673,7 +673,7 @@ class GRunView extends WatchUi.DataField
       
       // else (value >= 56 /* OPTION_REQUIRED_PACE_5K */)
       var remainingTimer = (targetPace * etaDistance) - timer;
-      return (remainingTimer / remainingDistance).toNumber();
+      return targetPace == 0 ? 0 : (remainingTimer / remainingDistance).toNumber();
     }
     
     return valueData;
