@@ -4,7 +4,7 @@
   <property id="HeaderHeight" type="number">30</property>
   <property id="SingleBackgroundColor" type="boolean">false</property>
   <property id="LapDistance" type="number">0</property>
-  <property id="TargetPace" type="number">330</property>
+  <property id="TargetPace" type="string">5:30</property>
   <property id="PaceRange" type="number">15</property>
   <property id="RowHeightRatio" type="string">4,7,7,3,3</property>
   <property id="ColumnWidthRatio1" type="string">2,1,2</property>
