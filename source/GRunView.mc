@@ -906,7 +906,7 @@ class GRunView extends WatchUi.DataField
     // Dynamic Background & Foreground Color
     if (color != null)
     {
-      if (dynamicBackgroundColor && targetPace != 0)
+      if (dynamicBackgroundColor && !((type == 7 || type == 10 || type == 27) && targetPace == 0))
       {
         bgColor = color;
         
@@ -917,7 +917,7 @@ class GRunView extends WatchUi.DataField
         dc.fillRectangle(areaX, areaY, areaWidth, areaHeight);
       }
       
-      else if (dynamicForegroundColor && targetPace != 0)
+      else if (dynamicForegroundColor && !((type == 7 || type == 10 || type == 27) && targetPace == 0))
       {
         // Replace some colors on white background
         if (isWhiteBG)
