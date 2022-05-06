@@ -36,7 +36,9 @@ class GRunView extends WatchUi.DataField
   // Number of lap
   protected var lapCount = 0;
   // Time taken on previous lap
-  protected var timerLastLap = 0;
+  protected var timerPreviousLap = 0;
+  // Distance on previous lap
+  protected var distancePreviousLap = 0;
   // Exact time when lap has changed
   protected var startTimerCurrentLap = 0;
   // Exact distance when lap has changed
@@ -57,8 +59,6 @@ class GRunView extends WatchUi.DataField
   //   DataForegroundColor: Display Data foreground in red/green/blue based on values (exemple current pace)
   protected var dynamicColor;
   
-  // Header Position change the layout. Possible values are 1, 2 and 3
-  protected var headerPosition;
   // Header Height in pixel. Calculated using HeaderHeight parameter in percentage
   protected var headerHeight;
   // If true, rows 4/5 have same color as rows 1/2/3
@@ -66,13 +66,10 @@ class GRunView extends WatchUi.DataField
   
   // If greater than 0, distance will be rounded to the nearest lapDistance every time lap button is pressed
   protected var lapDistance;
-  // Used to determine if we are ahead or behinh de schedule
+  // Used to determine if we are ahead or behind the schedule
   protected var targetPace;
   // Used to determine if speed/pace is too slow or too fast
   protected var paceRange;
-
-  // How often recalculate data
-  protected var dataRefreshInterval;
   
   // Used to stored the type of data each area will display (Exemple: Current Pace, Distance, etc.)
   protected var vType = new [10]b;
@@ -131,11 +128,13 @@ class GRunView extends WatchUi.DataField
     OPTION_CURRENT_LOCATION_ACCURACY_AND_BATTERY = 20,
     OPTION_CURRENT_POWER = 21,
     OPTION_AVERAGE_POWER = 22,
+    OPTION_PREVIOUS_LAP_DISTANCE = 23,
+    OPTION_PREVIOUS_LAP_PACE = 24,
     OPTION_CURRENT_LAP_TIME = 25,
     OPTION_CURRENT_LAP_DISTANCE = 26,
     OPTION_CURRENT_LAP_PACE = 27,
     OPTION_TRAINING_EFFECT = 28,
-    OPTION_TIMER_TIME_ON_PREVIOUS_LAP = 30,
+    OPTION_PREVIOUS_LAP_TIME = 30,
     OPTION_ETA_LAP = 31.
     OPTION_LAP_COUNT = 32,
     OPTION_AVERAGE_CADENCE = 33,
@@ -169,48 +168,19 @@ class GRunView extends WatchUi.DataField
     return paramValue;
   }
   
-  // Transforms mm:ss to seconds (and also hh:mm to minutes)
-  function getTimeParameter(paramName, defaultValue) {
-  	var paramValue = Application.Properties.getValue(paramName);
-  	if (defaultValue == null) {
-  		defaultValue = 0;
-  	}
-    if (paramValue == null || paramValue.length() == 0) {
-      paramValue = "0";
-      Application.Properties.setValue(paramName, "0");
-    }
   
-    var pos = paramValue.find(":");
-    if (pos == null) {
-      var returnTime = paramValue.toNumber();
-      return returnTime == null ? defaultValue : returnTime;
-    } else {
-      var min = paramValue.substring(0, pos).toNumber();
-      var sec = paramValue.substring(pos + 1, paramValue.length()).toNumber();
-      if (min != null && sec != null) {
-         return (min * 60) + sec;
-      } else {
-        return defaultValue;
-      }
-    }
-  }
-      
-  function splitString(s)
+  function splitString(s, defaultArray)
   {
-    if ( (s == null) || (s.length() == 0) ) { s = "0"; }
+    if ( (s == null) || (s.length() == 0) ) { return defaultArray; }
     
-    var numberofParams = 1;
-    for (var i = 0; i < s.length(); i++) { if (s.substring(i, i + 1).equals(",")) { numberofParams++; } }
-    var parsedArray = new [numberofParams];
-  
-    for (var i = 0; i < numberofParams; i++)
+    var parsedArray = new [defaultArray.size()];
+    for (var i = 0; i < defaultArray.size(); i++)
     {
       var commaIndex = s.find(",");
       if (commaIndex == null) { commaIndex = s.length(); }
+      if (commaIndex == 0) { return defaultArray; }
       
-      var subString = s.substring(0, commaIndex).toNumber();
-      
-      parsedArray[i] = subString;
+      parsedArray[i] = s.substring(0, commaIndex).toNumber();
       s = s.substring(commaIndex + 1, s.length());
     }
     
@@ -258,8 +228,7 @@ class GRunView extends WatchUi.DataField
     var rowHeightRatio = getParameter("RowHeightRatio", "4,7,7,3,3");
     var typeArray = [vType[0], vType[1] + vType[2] + vType[3], vType[4] + vType[5] + vType[6], vType[7] + vType[8], vType[9]];
     
-    var numberArray = splitString(rowHeightRatio);
-    if (numberArray.size() != 5) { numberArray = [4,7,7,3,3]b; }
+    var numberArray = splitString(rowHeightRatio, [4,7,7,3,3]b);
     var totalHeightRatio = sumAreaArray(numberArray, typeArray);
     
     var y = 0;
@@ -292,8 +261,8 @@ class GRunView extends WatchUi.DataField
   
   function configureAreaWidth(s, beginIndex, endIndex)
   {
-    var numberArray = splitString(s);
-    if ( (beginIndex < 7) && (numberArray.size() != 3) ) { numberArray = [2, 1, 2]b; }
+    var defaultArray = beginIndex < 7 ?  [2, 1, 2]b :  [1, 1]b;
+    var numberArray = splitString(s, defaultArray);
     var totalWidthRatio = sumAreaArray(numberArray, vType.slice(beginIndex, endIndex));
     
     var x = 0;
@@ -311,7 +280,6 @@ class GRunView extends WatchUi.DataField
     initCompleted = 6;
     fontHeader = Graphics.FONT_LARGE;
   
-    headerPosition = getParameter("HeaderPosition", 1);
     var headerHeightPercentage = getParameter("HeaderHeight", 30) / 100.0;
     singleBackgroundColor = getParameter("SingleBackgroundColor", false);
     
@@ -325,21 +293,19 @@ class GRunView extends WatchUi.DataField
     dynamicColor = dynamicColor<<4 | getParameter("DataForegroundColor", 0);
     
     lapDistance = getParameter("LapDistance", 0);
-    targetPace = getTimeParameter("TargetPace", 0);
+    targetPace = getParameter("TargetPace", isPaceUnitsImperial ? 530 : 330);
     paceRange = getParameter("PaceRange", 15);
     
-    dataRefreshInterval = getParameter("DataRefreshInterval", 1);
-        
     var TYPE_DEFAULT_VALUE = [
-      6 /* OPTION_CURRENT_HEART_RATE */,
+      6  /* OPTION_CURRENT_HEART_RATE */,
       50 /* OPTION_ETA_5K */,
-      0 /* OPTION_EMPTY */,
-      7 /* OPTION_CURRENT_PACE */,
-      5 /* OPTION_ELAPSED_DISTANCE */,
+      0  /* OPTION_EMPTY */,
+      7  /* OPTION_CURRENT_PACE */,
+      5  /* OPTION_ELAPSED_DISTANCE */,
       14 /* OPTION_CURRENT_CADENCE */,
       10 /* OPTION_AVERAGE_PACE */,
-      2 /* OPTION_TIMER_TIME */,
-      1 /* OPTION_CURRENT_TIME */,
+      2  /* OPTION_TIMER_TIME */,
+      1  /* OPTION_CURRENT_TIME */,
       20 /* OPTION_CURRENT_LOCATION_ACCURACY_AND_BATTERY */
     ]b;
     
@@ -355,7 +321,6 @@ class GRunView extends WatchUi.DataField
     }
     
     /*
-    log("HeaderPosition: " + headerPosition);
     log("Area 1: " + getOptionName(v1));
     log("Area 2a: " + getOptionName(v2));
     log("Area 2b: " + getOptionName(v3));
@@ -413,7 +378,7 @@ class GRunView extends WatchUi.DataField
   function onTimerLap()
   {
     lapCount++;
-    timerLastLap = timer - startTimerCurrentLap;
+    timerPreviousLap = timer - startTimerCurrentLap;
     
     var info = Activity.getActivityInfo();
     startTimerCurrentLap = info.timerTime / 1000.0;
@@ -428,7 +393,9 @@ class GRunView extends WatchUi.DataField
       else { distanceOffset += (lapDistance - diff); }          // Distance lower than expected
     }
     
-    startDistanceCurrentLap = convertUnitIfRequired((info.elapsedDistance + distanceOffset) / 1000.0, 0.62137119 /* CONVERSION_KM_TO_MILE */, isDistanceUnitsImperial); 
+    var startDistancePreviousLap = startDistanceCurrentLap;
+    startDistanceCurrentLap = convertUnitIfRequired((info.elapsedDistance + distanceOffset) / 1000.0, 0.62137119 /* CONVERSION_KM_TO_MILE */, isDistanceUnitsImperial);
+    distancePreviousLap =  startDistanceCurrentLap - startDistancePreviousLap;
   }
   
   
@@ -451,100 +418,103 @@ class GRunView extends WatchUi.DataField
   
   function computeValue(info, id, value, valueData)
   {
-    // The current timer value
-    if (value == 2 /* OPTION_TIMER_TIME */)
+    if (value <= 20)
     {
-      return timer;
-    }
-    
-    // Elapsed  of the current activity in meters (m)
-    if (value == 5 /* OPTION_ELAPSED_DISTANCE */)
-    {
-      return distance;
-    }
-    
-    // Current heart rate in beats per minute (bpm)
-    if ( (value == 6 /* OPTION_CURRENT_HEART_RATE */) && (info.currentHeartRate != null) ) 
-    {
-      return info.currentHeartRate;
-    }
-    
-    // Current pace in second per kilometer
-    if ( (value == 7 /* OPTION_CURRENT_PACE */) && (info.currentSpeed != null) )
-    {
-      if (info.currentSpeed <= 0) { return 0; }
-      return convertUnitIfRequired(1000 / info.currentSpeed, 1.609344 /* CONVERSION_MILE_TO_KM */, isPaceUnitsImperial);
-    }
-    
-    // Current speed in meters per second (mps)
-    if ( (value == 8 /* OPTION_CURRENT_SPEED */) && (info.currentSpeed != null) )
-    {
-      return convertUnitIfRequired(info.currentSpeed * 3.6, 0.62137119 /* CONVERSION_KM_TO_MILE */, isPaceUnitsImperial);
-    }
-    
-    // Average heart rate during the current activity in beats per minute (bpm)
-    if ( (value == 9 /* OPTION_AVERAGE_HEART_RATE */) && (info.averageHeartRate != null) ) 
-    {
-      return info.averageHeartRate;
-    }
-    
-    // Average pace in second per kilometer
-    if ( (value == 10 /* OPTION_AVERAGE_PACE */) && (info.averageSpeed != null) )
-    {
-      if (lapDistance > 0 && distanceOffset != 0) { return (distance <= 0) ? 0 : timer / distance; }
-      if (info.averageSpeed <= 0) { return 0; }
-      return convertUnitIfRequired(1000 / info.averageSpeed, 1.609344 /* CONVERSION_MILE_TO_KM */, isPaceUnitsImperial);
-    }
-    
-    // Average speed during the current activity in meters per second (mps)
-    if ( (value == 12 /* OPTION_AVERAGE_SPEED */) && (info.averageSpeed != null) )
-    {
-      if (lapDistance > 0 && distanceOffset != 0) { return (timer <= 0) ? 0 : distance / timer * 3600; }
-      return convertUnitIfRequired(info.averageSpeed * 3.6, 0.62137119 /* CONVERSION_KM_TO_MILE */, isPaceUnitsImperial);
-    }
-        
-    // Calories burned throughout the current activity in kilocalories (kcal)
-    if ( (value == 13 /* OPTION_CALORIES */) && (info.calories != null) ) 
-    {
-      return info.calories;
-    }
-    
-    // Current cadence in revolutions per minute (rpm)
-    if ( (value == 14 /* OPTION_CURRENT_CADENCE */) && (info.currentCadence != null) )
-    {
-      return info.currentCadence;
-    }
-    
-    // Current altitude in meters (m)
-    if ( (value == 15 /* OPTION_ALTITUDE */) && (info.altitude  != null) )
-    {
-      return convertUnitIfRequired(info.altitude, 3.28084 /* CONVERSION_METER_TO_FEET */, isElevationUnitsImperial);
-    }
-    
-    // The total ascent during the current activity in meters (m)
-    if ( (value == 16 /* OPTION_TOTAL_ASCENT */) && (info.totalAscent != null) )
-    {
-      return convertUnitIfRequired(info.totalAscent, 3.28084 /* CONVERSION_METER_TO_FEET */, isElevationUnitsImperial);
-    }
-
-    // The total descent during the current activity in meters (m)
-    if ( (value == 17 /* OPTION_TOTAL_DESCENT */) && (info.totalDescent != null) )
-    {
-      return convertUnitIfRequired(info.totalDescent, 3.28084 /* CONVERSION_METER_TO_FEET */, isElevationUnitsImperial);
-    }
-    
-    // Current GPS accuracy & Battery Usage
-    if ( (value == 19 /* OPTION_CURRENT_LOCATION_ACCURACY */ || value == 20 /* OPTION_CURRENT_LOCATION_ACCURACY_AND_BATTERY */) && info.currentLocationAccuracy != null )
-    {
-      if (valueData != info.currentLocationAccuracy)
+      // The current timer value
+      if (value == 2 /* OPTION_TIMER_TIME */)
       {
-        var rezGPSTable = [Rez.Drawables.GPS0, Rez.Drawables.GPS1, Rez.Drawables.GPS2, Rez.Drawables.GPS3, Rez.Drawables.GPS4];
-        imgGPS = WatchUi.loadResource(rezGPSTable[info.currentLocationAccuracy]);
+        return timer;
       }
-              
-      return info.currentLocationAccuracy;
+      
+      // Elapsed  of the current activity in meters (m)
+      if (value == 5 /* OPTION_ELAPSED_DISTANCE */)
+      {
+        return distance;
+      }
+      
+      // Current heart rate in beats per minute (bpm)
+      if ( (value == 6 /* OPTION_CURRENT_HEART_RATE */) && (info.currentHeartRate != null) ) 
+      {
+        return info.currentHeartRate;
+      }
+      
+      // Current pace in second per kilometer
+      if ( (value == 7 /* OPTION_CURRENT_PACE */) && (info.currentSpeed != null) )
+      {
+        if (info.currentSpeed <= 0) { return 0; }
+        return convertUnitIfRequired(1000 / info.currentSpeed, 1.609344 /* CONVERSION_MILE_TO_KM */, isPaceUnitsImperial);
+      }
+      
+      // Current speed in meters per second (mps)
+      if ( (value == 8 /* OPTION_CURRENT_SPEED */) && (info.currentSpeed != null) )
+      {
+        return convertUnitIfRequired(info.currentSpeed * 3.6, 0.62137119 /* CONVERSION_KM_TO_MILE */, isPaceUnitsImperial);
+      }
+      
+      // Average heart rate during the current activity in beats per minute (bpm)
+      if ( (value == 9 /* OPTION_AVERAGE_HEART_RATE */) && (info.averageHeartRate != null) ) 
+      {
+        return info.averageHeartRate;
+      }
+      
+      // Average pace in second per kilometer
+      if ( (value == 10 /* OPTION_AVERAGE_PACE */) && (info.averageSpeed != null) )
+      {
+        if (lapDistance > 0 && distanceOffset != 0) { return (distance <= 0) ? 0 : timer / distance; }
+        if (info.averageSpeed <= 0) { return 0; }
+        return convertUnitIfRequired(1000 / info.averageSpeed, 1.609344 /* CONVERSION_MILE_TO_KM */, isPaceUnitsImperial);
+      }
+      
+      // Average speed during the current activity in meters per second (mps)
+      if ( (value == 12 /* OPTION_AVERAGE_SPEED */) && (info.averageSpeed != null) )
+      {
+        if (lapDistance > 0 && distanceOffset != 0) { return (timer <= 0) ? 0 : distance / timer * 3600; }
+        return convertUnitIfRequired(info.averageSpeed * 3.6, 0.62137119 /* CONVERSION_KM_TO_MILE */, isPaceUnitsImperial);
+      }
+          
+      // Calories burned throughout the current activity in kilocalories (kcal)
+      if ( (value == 13 /* OPTION_CALORIES */) && (info.calories != null) ) 
+      {
+        return info.calories;
+      }
+      
+      // Current cadence in revolutions per minute (rpm)
+      if ( (value == 14 /* OPTION_CURRENT_CADENCE */) && (info.currentCadence != null) )
+      {
+        return info.currentCadence;
+      }
+      
+      // Current altitude in meters (m)
+      if ( (value == 15 /* OPTION_ALTITUDE */) && (info.altitude  != null) )
+      {
+        return convertUnitIfRequired(info.altitude, 3.28084 /* CONVERSION_METER_TO_FEET */, isElevationUnitsImperial);
+      }
+      
+      // The total ascent during the current activity in meters (m)
+      if ( (value == 16 /* OPTION_TOTAL_ASCENT */) && (info.totalAscent != null) )
+      {
+        return convertUnitIfRequired(info.totalAscent, 3.28084 /* CONVERSION_METER_TO_FEET */, isElevationUnitsImperial);
+      }
+
+      // The total descent during the current activity in meters (m)
+      if ( (value == 17 /* OPTION_TOTAL_DESCENT */) && (info.totalDescent != null) )
+      {
+        return convertUnitIfRequired(info.totalDescent, 3.28084 /* CONVERSION_METER_TO_FEET */, isElevationUnitsImperial);
+      }
+      
+      // Current GPS accuracy & Battery Usage
+      if ( (value == 19 /* OPTION_CURRENT_LOCATION_ACCURACY */ || value == 20 /* OPTION_CURRENT_LOCATION_ACCURACY_AND_BATTERY */) && info.currentLocationAccuracy != null )
+      {
+        if (valueData != info.currentLocationAccuracy)
+        {
+          var rezGPSTable = [Rez.Drawables.GPS0, Rez.Drawables.GPS1, Rez.Drawables.GPS2, Rez.Drawables.GPS3, Rez.Drawables.GPS4];
+          imgGPS = WatchUi.loadResource(rezGPSTable[info.currentLocationAccuracy]);
+        }
+                
+        return info.currentLocationAccuracy;
+      }
     }
-    
+      
     // Current power in Watts (W)
     if ( (value == 21 /* OPTION_CURRENT_POWER */) && (info.currentPower != null) )
     {
@@ -555,6 +525,19 @@ class GRunView extends WatchUi.DataField
     if ( (value == 22 /* OPTION_AVERAGE_POWER */) && (info.averagePower != null) ) 
     {
       return info.averagePower;
+    }
+    
+    // Elapsed distance for the previous lap
+    if (value == 23 /* OPTION_PREVIOUS_LAP_DISTANCE */)
+    {
+      return distancePreviousLap;
+    }
+    
+    // Average Pace for the previous lap
+    if (value == 24 /* OPTION_PREVIOUS_LAP_PACE */)
+    {
+      if (distancePreviousLap <= 0) { return 0; }
+      return timerPreviousLap / distancePreviousLap;
     }
     
     // Elapsed time for the current lap
@@ -585,10 +568,10 @@ class GRunView extends WatchUi.DataField
       return info.trainingEffect;
     }
     
-    // Time taken on previous km or mile
-    if (value == 30 /* OPTION_TIMER_TIME_ON_PREVIOUS_LAP */) 
+    // Time taken on previous lap
+    if (value == 30 /* OPTION_PREVIOUS_LAP_TIME */) 
     {
-      return timerLastLap;
+      return timerPreviousLap;
     }
     
     if (value == 31 /* OPTION_ETA_LAP */)
@@ -622,13 +605,13 @@ class GRunView extends WatchUi.DataField
     // Average cadence during the current activity in revolutions per minute (rpm)
     if ( (value == 33 /* OPTION_AVERAGE_CADENCE */) && (info.averageCadence != null) )
     {
-      return info.averageCadence;
+      return info.averageCadence * 2;
     }
     
     // Calculate if we are ahead of behing the target pace
     if (value == 34 /* OPTION_TIME_OFFSET */)
     {
-      return targetPace == 0 ? 0 : timer - (targetPace * distance);
+      return timer - (targetPace * distance);
     }
     
     if ( (value == 35 /* OPTION_HR_ZONE */) && (info.currentHeartRate != null) )
@@ -673,7 +656,7 @@ class GRunView extends WatchUi.DataField
       
       // else (value >= 56 /* OPTION_REQUIRED_PACE_5K */)
       var remainingTimer = (targetPace * etaDistance) - timer;
-      return targetPace == 0 ? 0 : (remainingTimer / remainingDistance).toNumber();
+      return (remainingTimer / remainingDistance).toNumber();
     }
     
     return valueData;
@@ -686,12 +669,6 @@ class GRunView extends WatchUi.DataField
   // guarantee that compute() will be called before onUpdate().
   function compute(info)
   {
-    //compute new info only in given interval
-  	var currentSecond = System.getClockTime().sec; 
-	if ((currentSecond == 0 ? 60 : currentSecond) % dataRefreshInterval != 0) {
-		return;
-	}
-	
     // The current timer value in milliseconds (ms)
     if (info.timerTime != null)
     {
@@ -788,17 +765,17 @@ class GRunView extends WatchUi.DataField
     if (headerHeight > 0)
     {
       dc.setPenWidth(1);
-      drawHeaderLine(dc, 1, 3);
-      drawHeaderLine(dc, 4, 2);
+      drawHeaderLine(dc, 1);
+      drawHeaderLine(dc, 4);
     }
   }
   
   
-  function drawHeaderLine(dc, areaIndex, headerPositionID)
+  function drawHeaderLine(dc, areaIndex)
   {
     if (vArea[areaIndex][3] > 0)
     {
-      var headerY = (headerPosition == headerPositionID) ? vArea[areaIndex][1] + vArea[areaIndex][3] - headerHeight : vArea[areaIndex][1] + headerHeight;
+      var headerY = vArea[areaIndex][1] + headerHeight;
       dc.drawLine(0, headerY, deviceWidth, headerY);
     }
   }
@@ -850,16 +827,7 @@ class GRunView extends WatchUi.DataField
       {
         var headerY = valueArea[1];
         areaHeight -= headerHeight;
-        
-        if ( (headerPosition == 2 && id > 4) || (headerPosition == 3 && id < 5) )
-        {
-          headerY += valueArea[3] - headerHeight;
-        }
-        
-        else
-        {
-          areaY += headerHeight;
-        }
+        areaY += headerHeight;
         
         // Header Background Color
         var dynamicHeaderBackgroundColor = (dynamicColor >> 8) == 1;
@@ -906,7 +874,7 @@ class GRunView extends WatchUi.DataField
     // Dynamic Background & Foreground Color
     if (color != null)
     {
-      if (dynamicBackgroundColor && !((type == 7 || type == 8 || type == 10 || type == 12 || type == 27) && targetPace == 0))
+      if (dynamicBackgroundColor)
       {
         bgColor = color;
         
@@ -917,7 +885,7 @@ class GRunView extends WatchUi.DataField
         dc.fillRectangle(areaX, areaY, areaWidth, areaHeight);
       }
       
-      else if (dynamicForegroundColor && !((type == 7 || type == 8 || type == 10 || type == 12 || type == 27) && targetPace == 0))
+      else if (dynamicForegroundColor)
       {
         // Replace some colors on white background
         if (isWhiteBG)
@@ -1012,7 +980,7 @@ class GRunView extends WatchUi.DataField
       var displayIcon = false;
       
       // Display HR icon if in Area 1, 8, 9 or 10
-      if ( ((type == 6 /* OPTION_CURRENT_HEART_RATE */) || (type == 9 /* OPTION_AVERAGE_HEART_RATE */)) && (hasHeader == false) )
+      if ( ((type == 6 /* OPTION_CURRENT_HEART_RATE */) || (type == 9 /* OPTION_AVERAGE_HEART_RATE */) || (type == 170 /* OPTION_LAP_AVERAGE_HEART_RATE */)) && (hasHeader == false) )
       {
         displayIcon = true;
         
@@ -1040,6 +1008,7 @@ class GRunView extends WatchUi.DataField
       //    System.println("font: " + font + ", width: " + areaWidth + "|" + textDimensions[0] + "|" + textDimensions2[0] + "(" + (areaWidth-textDimensions2[0]) + "), height: " + areaHeight + "|" + textDimensions[1] + "|" + textDimensions2[1] + "(" + (areaHeight-textDimensions2[1]) + ")");
       //  }
       //}
+      ///////////////////////////////////////////////////////////////////////////////////////////////////
       
       // Realign text
       areaYcenter += GRunApp.getYOffset(font);
@@ -1109,11 +1078,13 @@ class GRunView extends WatchUi.DataField
     if (type == 20 /* OPTION_CURRENT_LOCATION_ACCURACY_AND_BATTERY */) { return "GPS/BAT"; }
     if (type == 21 /* OPTION_CURRENT_POWER */) { return "POW"; }
     if (type == 22 /* OPTION_AVERAGE_POWER */) { return "A POW"; }
+    if (type == 23 /* OPTION_PREVIOUS_LAP_DISTANCE */) { return "P LDIST"; }
+    if (type == 24 /* OPTION_PREVIOUS_LAP_PACE */) { return "P LPACE"; }
     if (type == 25 /* OPTION_CURRENT_LAP_TIME */) { return "LTIME"; }
     if (type == 26 /* OPTION_CURRENT_LAP_DISTANCE */) { return "LDIST"; }
     if (type == 27 /* OPTION_CURRENT_LAP_PACE */) { return "LPACE"; }
     if (type == 28 /* OPTION_TRAINING_EFFECT */) { return "TE"; }
-    if (type == 30 /* OPTION_TIMER_TIME_ON_PREVIOUS_LAP */) { return "LAST LAP"; }
+    if (type == 30 /* OPTION_PREVIOUS_LAP_TIME */) { return "P LTIME"; }
     if (type == 31 /* OPTION_ETA_LAP */) { return "ETA LAP"; }
     if (type == 32 /* OPTION_LAP_COUNT */) { return "LAP"; }
     if (type == 33 /* OPTION_AVERAGE_CADENCE */) { return "A CAD"; }
@@ -1152,6 +1123,7 @@ class GRunView extends WatchUi.DataField
     
     if (type == 7 /* OPTION_CURRENT_PACE */ ||
         type == 10 /* OPTION_AVERAGE_PACE */ ||
+        type == 24 /* OPTION_PREVIOUS_LAP_PACE */ ||
         type == 27 /* OPTION_CURRENT_LAP_PACE */ ||
         (type >= 56 /* OPTION_REQUIRED_PACE_5K */ && type <= 61 /* OPTION_REQUIRED_PACE_100K */) )
     {
@@ -1160,7 +1132,7 @@ class GRunView extends WatchUi.DataField
     
     if (type == 2 /* OPTION_TIMER_TIME */ ||
         type == 25 /* OPTION_CURRENT_LAP_TIME */ ||
-        type == 30 /* OPTION_TIMER_TIME_ON_PREVIOUS_LAP */ ||
+        type == 30 /* OPTION_PREVIOUS_LAP_TIME */ ||
         type == 31 /* OPTION_ETA_LAP */ ||
         (type >= 50 /* OPTION_ETA_5K */ && type <= 55 /* OPTION_ETA_100K */) )
     {
@@ -1168,6 +1140,7 @@ class GRunView extends WatchUi.DataField
     }
 
     if (type == 5 /* OPTION_ELAPSED_DISTANCE */ ||
+        type == 23 /* OPTION_PREVIOUS_LAP_DISTANCE */ ||
         type == 26 /* OPTION_CURRENT_LAP_DISTANCE */)
     {
       // Calling format("%.1f") will round the value. To truncate the value instead of rounding, we simply multiply by 10, convert to Integer and divide by 10.0 (Float).
@@ -1242,10 +1215,10 @@ class GRunView extends WatchUi.DataField
   
     if (type == 7 /* OPTION_CURRENT_PACE */ ||
         type == 10 /* OPTION_AVERAGE_PACE */ ||
+        type == 24 /* OPTION_PREVIOUS_LAP_PACE */ ||
         type == 27 /* OPTION_CURRENT_LAP_PACE */)
     {
       value = round(value);
-      if (targetPace == 0) { return headerBackgroundColor; }
       if (value <= 0) { return null; }
       if (value < (targetPace - paceRange)) { return Graphics.COLOR_BLUE; } // 0x00AAFF
       if (value > (targetPace + paceRange)) { return Graphics.COLOR_RED; } // 0xFF0000
@@ -1438,11 +1411,13 @@ class GRunView extends WatchUi.DataField
     //else if (type == 18 /* OPTION_CURRENT_BATTERY */) { return "OPTION_CURRENT_BATTERY"; }
     //else if (type == 19 /* OPTION_CURRENT_LOCATION_ACCURACY */) { return "OPTION_CURRENT_LOCATION_ACCURACY"; }
     //else if (type == 20 /* OPTION_CURRENT_LOCATION_ACCURACY_AND_BATTERY */) { return "OPTION_CURRENT_LOCATION_ACCURACY_AND_BATTERY"; }
+    //else if (type == 23 /* OPTION_PREVIOUS_LAP_DISTANCE */) { return "OPTION_PREVIOUS_LAP_DISTANCE"; }
+    //else if (type == 24 /* OPTION_PREVIOUS_LAP_PACE */) { return "OPTION_PREVIOUS_LAP_PACE"; }
     //else if (type == 25 /* OPTION_CURRENT_LAP_TIME */) { return "OPTION_CURRENT_LAP_TIME"; }
     //else if (type == 26 /* OPTION_CURRENT_LAP_DISTANCE */) { return "OPTION_CURRENT_LAP_DISTANCE"; }
     //else if (type == 27 /* OPTION_CURRENT_LAP_PACE */) { return "OPTION_CURRENT_LAP_PACE"; }
     //else if (type == 28 /* OPTION_TRAINING_EFFECT */) { return "OPTION_TRAINING_EFFECT"; }
-    //else if (type == 30 /* OPTION_TIMER_TIME_ON_PREVIOUS_LAP */) { return "OPTION_TIMER_TIME_ON_PREVIOUS_LAP"; }
+    //else if (type == 30 /* OPTION_PREVIOUS_LAP_TIME */) { return "OPTION_PREVIOUS_LAP_TIME"; }
     //else if (type == 31 /* OPTION_ETA_LAP */) { return "OPTION_ETA_LAP"; }
     //else if (type == 32 /* OPTION_LAP_COUNT */) { return "OPTION_LAP_COUNT"; }
     //else if (type == 33 /* OPTION_AVERAGE_CADENCE */) { return "OPTION_AVERAGE_CADENCE"; }

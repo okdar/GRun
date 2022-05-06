@@ -2,18 +2,13 @@
   <string id="AppName">GRun</string>
   <string id="PARAM_APP_VERSION">GRun Version</string>
 
-  <string id="PARAM_TARGET_PACE">Target Pace (in seconds or minutes:seconds per km or mile)</string>
-  <string id="PARAM_DESC_TARGET_PACE">Example: 330(sec) or 5:30(mm:ss) (km/mile is chosen automatically based on watch settings)</string>
-  <string id="PARAM_PACE_RANGE">Pace Range (in seconds)</string>
+  <string id="PARAM_TARGET_PACE">Target Pace (in seconds per km or mile)</string>
+  <string id="PARAM_DESC_TARGET_PACE">Example: 330 for 5min and 30sec (km/mile is chosen automatically based on watch settings</string>
+  <string id="PARAM_PACE_RANGE">Pace Range (+/- in seconds)</string>
   <string id="PARAM_DESC_PACE_RANGE">Use to display speed/pace in color if outside the range</string>
 
   <string id="PARAM_LAP_DISTANCE">Lap Distance (in meters)</string>
   <string id="PARAM_DESC_LAP_DISTANCE">Auto correct distance when lap button is pressed (0=disable, 1000=1km, 1609=1mile)</string>
-  
-  <string id="PARAM_HEADER_POSITION">Header Position</string>
-  <string id="PARAM_HEADER_POSITION_1">Top / Top</string>
-  <string id="PARAM_HEADER_POSITION_2">Top / Bottom</string>
-  <string id="PARAM_HEADER_POSITION_3">Bottom / Top</string>
   
   <string id="PARAM_HEADER_HEIGHT">Header Height (%)</string>
   <string id="PARAM_DESC_HEADER_HEIGHT">0 to hide headers</string>
@@ -76,6 +71,8 @@
   <string id="Field27">Lap Pace</string>
   <string id="Field28">Training Effect</string>
   <string id="Field30">Previous Lap Time</string>
+  <string id="Field23">Previous Lap Distance</string>
+  <string id="Field24">Previous Lap Pace</string>
   <string id="Field31">ETA Lap</string>
   <string id="Field32">Lap Count</string>
   <string id="Field33">Average Cadence</string>
@@ -93,7 +90,4 @@
   <string id="Field59">Required Pace Marathon (42.195 km)</string>
   <string id="Field60">Required Pace 50K</string>
   <string id="Field61">Required Pace 100K</string>
-  
-  <string id="PARAM_DATA_REFRESH_INTERVAL">Data refresh interval (in seconds)</string>
-  <string id="PARAM_DESC_DATA_REFRESH_INTERVAL">Default = 1, Max = 60</string>
 </strings>
