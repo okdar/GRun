@@ -4,7 +4,7 @@
   </setting>
 
   <setting propertyKey="@Properties.TargetPace" title="@Strings.PARAM_TARGET_PACE" prompt="@Strings.PARAM_DESC_TARGET_PACE">
-    <settingConfig type="numeric" min="0" />
+    <settingConfig type="alphaNumeric" />
   </setting>
 
   <setting propertyKey="@Properties.PaceRange" title="@Strings.PARAM_PACE_RANGE"  prompt="@Strings.PARAM_DESC_PACE_RANGE">
@@ -57,5 +57,5 @@
       <listEntry value="2">@Strings.PARAM_MIDDLE_FOREGROUND_COLOR</listEntry>
     </settingConfig>
   </setting>
-
+  
 </settings>

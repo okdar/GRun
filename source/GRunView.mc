@@ -170,7 +170,32 @@ class GRunView extends WatchUi.DataField
     if (paramValue == null) { return 0; }
     return paramValue;
   }
-  
+
+// Transforms mm:ss to seconds (and also hh:mm to minutes)
+  function getTimeParameter(paramName, defaultValue) {
+  	var paramValue = Application.Properties.getValue(paramName);
+  	if (defaultValue == null) {
+  		defaultValue = 0;
+  	}
+    if (paramValue == null || paramValue.length() == 0) {
+      paramValue = "0";
+      Application.Properties.setValue(paramName, "0");
+    }
+
+    var pos = paramValue.find(":");
+    if (pos == null) {
+      var returnTime = paramValue.toNumber();
+      return returnTime == null ? defaultValue : returnTime;
+    } else {
+      var min = paramValue.substring(0, pos).toNumber();
+      var sec = paramValue.substring(pos + 1, paramValue.length()).toNumber();
+      if (min != null && sec != null) {
+         return (min * 60) + sec;
+      } else {
+        return defaultValue;
+      }
+    }
+  }
   
   function splitString(s, defaultArray) as ByteArray
   {
@@ -295,7 +320,7 @@ class GRunView extends WatchUi.DataField
     dynamicColor = dynamicColor<<4 | getParameter("DataForegroundColor", 0);
     
     lapDistance = getParameter("LapDistance", 0);
-    targetPace = getParameter("TargetPace", isPaceUnitsImperial ? 530 : 330);
+    targetPace = getTimeParameter("TargetPace", 0);
     paceRange = getParameter("PaceRange", 15);
     
     var TYPE_DEFAULT_VALUE = [
@@ -613,7 +638,7 @@ class GRunView extends WatchUi.DataField
     // Calculate if we are ahead of behing the target pace
     if (value == 34 /* OPTION_TIME_OFFSET */)
     {
-      return timer - (targetPace * distance);
+      return targetPace == 0 ? 0 : timer - (targetPace * distance);
     }
     
     if ( (value == 35 /* OPTION_HR_ZONE */) && (info.currentHeartRate != null) )
@@ -658,7 +683,7 @@ class GRunView extends WatchUi.DataField
       
       // else (value >= 56 /* OPTION_REQUIRED_PACE_5K */)
       var remainingTimer = (targetPace * etaDistance) - timer;
-      return (remainingTimer / remainingDistance).toNumber();
+      return targetPace == 0 ? 0 : (remainingTimer / remainingDistance).toNumber();
     }
     
     return valueData;
@@ -876,7 +901,7 @@ class GRunView extends WatchUi.DataField
     // Dynamic Background & Foreground Color
     if (color != null)
     {
-      if (dynamicBackgroundColor)
+      if (dynamicBackgroundColor && !((type == 7 || type == 8 || type == 10 || type == 12 || type == 27) && targetPace == 0))
       {
         bgColor = color;
         
@@ -887,7 +912,7 @@ class GRunView extends WatchUi.DataField
         dc.fillRectangle(areaX, areaY, areaWidth, areaHeight);
       }
       
-      else if (dynamicForegroundColor)
+      else if (dynamicForegroundColor && !((type == 7 || type == 8 || type == 10 || type == 12 || type == 27) && targetPace == 0))
       {
         // Replace some colors on white background
         if (isWhiteBG)
